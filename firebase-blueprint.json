@@ -1,0 +1,54 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ContactSubmission": {
+      "title": "ContactSubmission",
+      "description": "User inquiries and messages",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "serviceId": { "type": "string", "maxLength": 50 },
+        "projectBrief": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "maxLength": 30 }
+      },
+      "required": ["fullName", "email", "serviceId", "projectBrief"]
+    },
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Test doc for verifying connection",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "maxLength": 50 }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection accessible by the owner"
+    },
+    "/contact_submissions/{submissionId}": {
+      "schema": "ContactSubmission",
+      "description": "Contact inquiries submitted by users"
+    },
+    "/test/{docId}": {
+      "schema": "TestConnection",
+      "description": "Connection test documents"
+    }
+  }
+}

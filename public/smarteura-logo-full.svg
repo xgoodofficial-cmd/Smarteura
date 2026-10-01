@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" fill="none">
+  <g transform="translate(93, 20)">
+    <polygon points="20,130 46,130 106,78 106,56" fill="#123F32" />
+    <polygon points="110,74 124,14 135,22 121,82" fill="#849C8F" />
+    <polygon points="88,104 118,116 180,116 194,130 108,130 76,114" fill="#123F32" />
+  </g>
+  <text x="200" y="196" text-anchor="middle" font-family="'Montserrat', 'Inter', -apple-system, sans-serif" font-size="26" font-weight="800" letter-spacing="0.38em" fill="#123F32">SMARTEURA</text>
+</svg>

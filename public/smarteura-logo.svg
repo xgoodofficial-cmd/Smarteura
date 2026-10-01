@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 214 144" fill="none">
+  <!-- Piece 1: Main Diagonal Beam (Dark Green) -->
+  <polygon points="20,130 46,130 106,78 106,56" fill="#123F32" />
+
+  <!-- Piece 2: Sage Blade (Sage Green) -->
+  <polygon points="110,74 124,14 135,22 121,82" fill="#849C8F" />
+
+  <!-- Piece 3: Lower Base Runner (Dark Green) -->
+  <polygon points="88,104 118,116 180,116 194,130 108,130 76,114" fill="#123F32" />
+</svg>

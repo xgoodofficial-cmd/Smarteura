@@ -1,0 +1,6 @@
+{
+  "name": "SMARTEURA",
+  "description": "UAB Smarteura — Çoxdilli korporativ veb-sayt və sənaye həlləri platforması (EN, LT, FR, NL, TR).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
