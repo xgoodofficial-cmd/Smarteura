@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Calendar, Tag, Eye, X, Filter, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Tag, Eye, X, Filter, Sparkles, CheckCircle2 } from 'lucide-react';
 import { Language, GalleryItem } from '../types';
 import { translations } from '../data/translations';
 
@@ -207,19 +207,6 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ lang, gallery, onNavig
 
             {/* Modal Details */}
             <div className="p-6 sm:p-8">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#D5DED6] mb-4">
-                <div className="flex items-center gap-4 text-xs font-medium text-[#586B62]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-[#123F32]" />
-                    <span>{t.projectLocation}: <strong>{selectedItem.location}</strong></span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 font-mono">
-                    <Calendar className="w-4 h-4 text-[#123F32]" />
-                    <span>{t.yearCompleted}: <strong>{selectedItem.year}</strong></span>
-                  </span>
-                </div>
-              </div>
-
               <h2 className="text-xl sm:text-2xl font-bold text-[#193E33] mb-3">
                 {selectedItem.title[lang] || selectedItem.title.en}
               </h2>
