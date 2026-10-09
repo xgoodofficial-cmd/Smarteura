@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, X, Globe, ArrowUpRight, HardDrive, LogIn, Clock } from 'lucide-react';
+import { Menu, X, Globe, ArrowUpRight, HardDrive, LogIn, User as UserIcon, LogOut, ChevronDown, ShieldCheck } from 'lucide-react';
+import type { User } from 'firebase/auth';
 import { Language } from '../types';
 import { translations } from '../data/translations';
 import { SmarteuraLogo } from './SmarteuraLogo';
@@ -11,6 +12,9 @@ interface HeaderProps {
   onNavigate: (page: string) => void;
   onOpenAdminLogin?: () => void;
   onOpenWorkspace?: () => void;
+  user?: User | null;
+  onOpenLogin?: () => void;
+  onLogout?: () => void;
 }
 
 const LANGUAGES: { code: Language; label: string; flag: string }[] = [
@@ -21,13 +25,13 @@ const LANGUAGES: { code: Language; label: string; flag: string }[] = [
   { code: 'tr', label: 'TR', flag: '🇹🇷' }
 ];
 
-const LOGIN_I18N: Record<string, { login: string; comingSoon: string }> = {
-  en: { login: 'Login', comingSoon: 'Coming Soon' },
-  lt: { login: 'Prisijungti', comingSoon: 'Netrukus' },
-  fr: { login: 'Connexion', comingSoon: 'Bientôt disponible' },
-  nl: { login: 'Inloggen', comingSoon: 'Binnenkort' },
-  tr: { login: 'Giriş Yap', comingSoon: 'Çok Yakında' },
-  az: { login: 'Daxil ol', comingSoon: 'Tezliklə' }
+const LOGIN_I18N: Record<string, { login: string; cabinet: string; logout: string; verified: string }> = {
+  en: { login: 'Login', cabinet: 'Dashboard', logout: 'Sign Out', verified: 'Verified' },
+  lt: { login: 'Prisijungti', cabinet: 'Kabinetas', logout: 'Atsijungti', verified: 'Patvirtinta' },
+  fr: { login: 'Connexion', cabinet: 'Mon Espace', logout: 'Déconnexion', verified: 'Vérifié' },
+  nl: { login: 'Inloggen', cabinet: 'Mijn Kabinet', logout: 'Uitloggen', verified: 'Geverifieerd' },
+  tr: { login: 'Giriş Yap', cabinet: 'Kişisel Panel', logout: 'Çıkış Yap', verified: 'Onaylı' },
+  az: { login: 'Daxil ol', cabinet: 'Şəxsi Kabinet', logout: 'Çıxış', verified: 'Təsdiqlənmiş' }
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,32 +40,35 @@ export const Header: React.FC<HeaderProps> = ({
   activePage,
   onNavigate,
   onOpenAdminLogin,
-  onOpenWorkspace
+  onOpenWorkspace,
+  user,
+  onOpenLogin,
+  onLogout
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
-  const [showComingSoon, setShowComingSoon] = useState(false);
-  const comingSoonTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const t = translations[currentLang].nav;
   const loginI18n = LOGIN_I18N[currentLang] || LOGIN_I18N.en;
 
   const handleLoginClick = () => {
-    setShowComingSoon(true);
-    if (comingSoonTimerRef.current) {
-      clearTimeout(comingSoonTimerRef.current);
+    if (user) {
+      onNavigate('cabinet');
+    } else if (onOpenLogin) {
+      onOpenLogin();
     }
-    comingSoonTimerRef.current = setTimeout(() => {
-      setShowComingSoon(false);
-    }, 2500);
   };
 
   useEffect(() => {
-    return () => {
-      if (comingSoonTimerRef.current) {
-        clearTimeout(comingSoonTimerRef.current);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserDropdownOpen(false);
       }
     };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const logoClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -207,38 +214,83 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Login button (replaced Workspace) */}
-            <button
-              id="header-btn-workspace"
-              onClick={handleLoginClick}
-              className={`relative inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 cursor-pointer ${
-                showComingSoon
-                  ? 'border-amber-400 bg-amber-50 text-amber-900 shadow-xs ring-2 ring-amber-400/40'
-                  : 'border-[#D5DED6] bg-[#F8F9F6] text-[#123F32] hover:bg-[#EAF0E9] hover:border-[#123F32]'
-              }`}
-              title={showComingSoon ? loginI18n.comingSoon : loginI18n.login}
-              aria-label={loginI18n.login}
-            >
-              {showComingSoon ? (
-                <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" style={{ animationDuration: '3s' }} />
-              ) : (
-                <LogIn className="w-3.5 h-3.5 text-emerald-700" />
-              )}
-              <span>
-                {showComingSoon ? loginI18n.comingSoon : loginI18n.login}
-              </span>
-
-              {/* Floating notification tooltip when clicked */}
-              {showComingSoon && (
-                <span
-                  role="tooltip"
-                  className="absolute top-full mt-2 right-0 z-50 px-2.5 py-1 bg-[#123F32] text-white text-[11px] font-semibold rounded-md shadow-lg whitespace-nowrap animate-in fade-in slide-in-from-top-1 pointer-events-none flex items-center gap-1.5 border border-[#193E33]"
+            {/* User Profile or Login Button */}
+            {user ? (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  id="header-btn-workspace"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                    activePage === 'cabinet'
+                      ? 'border-[#123F32] bg-[#123F32] text-white shadow-xs'
+                      : 'border-[#D5DED6] bg-[#F8F9F6] text-[#123F32] hover:bg-[#EAF0E9] hover:border-[#123F32]'
+                  }`}
+                  aria-label={loginI18n.cabinet}
                 >
-                  <Clock className="w-3 h-3 text-amber-300" />
-                  <span>{loginI18n.comingSoon}</span>
-                </span>
-              )}
-            </button>
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || 'User'}
+                      className="w-4.5 h-4.5 rounded-full object-cover ring-1 ring-[#123F32]/20"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <UserIcon className="w-3.5 h-3.5 text-emerald-700" />
+                  )}
+                  <span>{user.displayName?.split(' ')[0] || loginI18n.cabinet}</span>
+                  <ChevronDown className="w-3 h-3 opacity-70" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {userDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-white shadow-xl border border-[#D5DED6] py-1.5 z-50 animate-in fade-in slide-in-from-top-1">
+                    <div className="px-3.5 py-2 border-b border-[#EAF0E9]">
+                      <p className="text-xs font-bold text-[#193E33] truncate">
+                        {user.displayName || 'Smarteura User'}
+                      </p>
+                      <p className="text-[11px] text-[#586B62] truncate font-mono">
+                        {user.email}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        onNavigate('cabinet');
+                        setUserDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[#193E33] hover:bg-[#EAF0E9] transition-colors text-left cursor-pointer"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-[#123F32]" />
+                      <span>{loginI18n.cabinet}</span>
+                    </button>
+
+                    {onLogout && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onLogout();
+                        }}
+                        className="w-full flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors text-left cursor-pointer border-t border-[#EAF0E9]"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-red-600" />
+                        <span>{loginI18n.logout}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                id="header-btn-workspace"
+                onClick={handleLoginClick}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#D5DED6] bg-[#F8F9F6] text-[#123F32] hover:bg-[#EAF0E9] hover:border-[#123F32] text-xs font-semibold transition-all duration-200 cursor-pointer shadow-xs"
+                title={loginI18n.login}
+                aria-label={loginI18n.login}
+              >
+                <LogIn className="w-3.5 h-3.5 text-emerald-700" />
+                <span>{loginI18n.login}</span>
+              </button>
+            )}
 
             {/* CTA Discuss Project */}
             <button
@@ -299,25 +351,70 @@ export const Header: React.FC<HeaderProps> = ({
           ))}
 
           <div className="pt-3 border-t border-[#D5DED6] flex flex-col gap-2">
-            {/* Mobile Login button */}
-            <button
-              id="mobile-btn-workspace"
-              onClick={handleLoginClick}
-              className={`w-full py-2.5 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                showComingSoon
-                  ? 'border-amber-400 bg-amber-50 text-amber-900 ring-2 ring-amber-400/40'
-                  : 'border-[#D5DED6] bg-[#F8F9F6] text-[#123F32] hover:bg-[#EAF0E9]'
-              }`}
-            >
-              {showComingSoon ? (
-                <Clock className="w-4 h-4 text-amber-600 animate-spin" style={{ animationDuration: '3s' }} />
-              ) : (
+            {/* Mobile User or Login */}
+            {user ? (
+              <div className="flex flex-col gap-2">
+                <div className="p-3 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] flex items-center gap-3">
+                  {user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName || 'User'}
+                      className="w-10 h-10 rounded-full object-cover ring-2 ring-[#123F32]/20"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#123F32] text-white flex items-center justify-center font-bold">
+                      {user.displayName?.charAt(0) || 'U'}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-[#193E33] truncate">
+                      {user.displayName || 'Smarteura User'}
+                    </p>
+                    <p className="text-xs text-[#586B62] truncate font-mono">
+                      {user.email}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="mobile-btn-workspace"
+                  onClick={() => {
+                    onNavigate('cabinet');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-[#123F32] text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                >
+                  <UserIcon className="w-4 h-4" />
+                  <span>{loginI18n.cabinet}</span>
+                </button>
+
+                {onLogout && (
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full py-2 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>{loginI18n.logout}</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                id="mobile-btn-workspace"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleLoginClick();
+                }}
+                className="w-full py-2.5 rounded-lg border border-[#D5DED6] bg-[#F8F9F6] text-[#123F32] hover:bg-[#EAF0E9] text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+              >
                 <LogIn className="w-4 h-4 text-emerald-700" />
-              )}
-              <span>
-                {showComingSoon ? loginI18n.comingSoon : loginI18n.login}
-              </span>
-            </button>
+                <span>{loginI18n.login}</span>
+              </button>
+            )}
 
             <button
               id="mobile-cta-discuss"

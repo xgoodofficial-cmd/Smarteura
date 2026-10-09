@@ -105,6 +105,86 @@ export const logoutWorkspace = async () => {
   cachedAccessToken = null;
 };
 
+// Standard Google Auth Provider for regular user sign-in (clean, without heavy workspace scopes)
+export const standardGoogleAuthProvider = new GoogleAuthProvider();
+standardGoogleAuthProvider.setCustomParameters({
+  prompt: 'select_account'
+});
+
+export const signInWithGoogle = async (): Promise<User> => {
+  try {
+    const result = await signInWithPopup(auth, standardGoogleAuthProvider);
+    const user = result.user;
+
+    // Sync basic user document in Firestore `users/{uid}`
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(
+        userRef,
+        {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || '',
+          createdAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (syncErr) {
+      console.warn('Could not sync user document to Firestore:', syncErr);
+    }
+
+    return user;
+  } catch (error) {
+    console.error('Google Sign-In Error:', error);
+    throw error;
+  }
+};
+
+export const logoutUser = async (): Promise<void> => {
+  await signOut(auth);
+  cachedAccessToken = null;
+};
+
+export const onUserAuthStateChanged = (callback: (user: User | null) => void) => {
+  return onAuthStateChanged(auth, callback);
+};
+
+export const getUserProfile = async (uid: string) => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    const snap = await getDocFromServer(userRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+    return null;
+  } catch (e) {
+    console.warn('Error fetching user profile from server:', e);
+    return null;
+  }
+};
+
+export const updateUserProfileData = async (
+  uid: string,
+  data: Partial<{ phone: string; company: string; notes: string; displayName: string }>
+) => {
+  const user = auth.currentUser;
+  if (!user || user.uid !== uid) {
+    throw new Error('Not authorized to update profile');
+  }
+  const userRef = doc(db, 'users', uid);
+  await setDoc(
+    userRef,
+    {
+      uid: user.uid,
+      email: user.email || '',
+      ...data,
+      updatedAt: new Date().toISOString()
+    },
+    { merge: true }
+  );
+};
+
 // Error handling helper required by Firebase Skill
 export enum OperationType {
   CREATE = 'create',

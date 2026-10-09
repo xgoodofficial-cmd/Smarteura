@@ -26,9 +26,13 @@ import { AboutPage } from './pages/AboutPage';
 import { NewsPage } from './pages/NewsPage';
 import { ContactsPage } from './pages/ContactsPage';
 import { AdminPage } from './pages/AdminPage';
+import { CabinetPage } from './pages/CabinetPage';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { LoginModal } from './components/LoginModal';
 import { Custom3DCursor } from './components/Custom3DCursor';
 import { WorkspaceHub } from './components/WorkspaceHub';
+import { onUserAuthStateChanged, logoutUser } from './lib/firebase';
+import type { User } from 'firebase/auth';
 
 export default function App() {
   // Primary language: EN by default (Section 5)
@@ -47,6 +51,18 @@ export default function App() {
   const [showAdminLoginModal, setShowAdminLoginModal] = useState<boolean>(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState<boolean>(false);
 
+  // Authenticated User & Personal Cabinet state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onUserAuthStateChanged((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Application data states loaded from persistent storage
   const [settings, setSettings] = useState<SiteSettings>(getStoredSettings);
   const [vacancies, setVacancies] = useState<Vacancy[]>(getStoredVacancies);
@@ -60,7 +76,10 @@ export default function App() {
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      if (['services', 'projects', 'gallery', 'career', 'about', 'news', 'contacts'].includes(hash)) {
+      if (['services', 'projects', 'gallery', 'career', 'about', 'news', 'contacts', 'cabinet'].includes(hash)) {
+        if (hash === 'cabinet' && !currentUser) {
+          setShowLoginModal(true);
+        }
         setActivePage(hash);
       } else if (hash === 'workspace') {
         setShowWorkspaceModal(true);
@@ -78,7 +97,7 @@ export default function App() {
     handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
+  }, [currentUser]);
 
   // Update hash when page changes
   const handleNavigate = (page: string) => {
@@ -119,7 +138,7 @@ export default function App() {
       {/* Interactive 3D Cursor & Touch Ripple System in #123F32 */}
       <Custom3DCursor />
 
-      {/* Global Header with 6-click secret logo trigger */}
+      {/* Global Header with active Google Login and User Cabinet */}
       <Header
         currentLang={currentLang}
         onLanguageChange={setCurrentLang}
@@ -127,6 +146,24 @@ export default function App() {
         onNavigate={handleNavigate}
         onOpenAdminLogin={() => setShowAdminLoginModal(true)}
         onOpenWorkspace={() => setShowWorkspaceModal(true)}
+        user={currentUser}
+        onOpenLogin={() => setShowLoginModal(true)}
+        onLogout={async () => {
+          await logoutUser();
+          setCurrentUser(null);
+          handleNavigate('home');
+        }}
+      />
+
+      {/* Google Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        lang={currentLang}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          handleNavigate('cabinet');
+        }}
       />
 
       {/* Secret Admin Login Modal */}
@@ -241,6 +278,42 @@ export default function App() {
                 settings={settings}
                 onRefreshData={handleRefreshData}
               />
+            )}
+
+            {activePage === 'cabinet' && (
+              currentUser ? (
+                <CabinetPage
+                  user={currentUser}
+                  lang={currentLang}
+                  inquiries={inquiries}
+                  applications={applications}
+                  onRefreshData={handleRefreshData}
+                  onNavigate={handleNavigate}
+                  onLogout={async () => {
+                    await logoutUser();
+                    setCurrentUser(null);
+                    handleNavigate('home');
+                  }}
+                />
+              ) : (
+                <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+                  <div className="max-w-md w-full bg-white p-8 rounded-3xl border border-[#D5DED6] shadow-sm">
+                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#123F32] flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                      SE
+                    </div>
+                    <h2 className="text-xl font-bold text-[#193E33] mb-2">Şəxsi Kabinetə Giriş</h2>
+                    <p className="text-xs text-[#586B62] mb-6 leading-relaxed">
+                      Smarteura müştəri və tərəfdaş portalındakı müraciətlərinizi idarə etmək üçün Google hesabınız ilə daxil olun.
+                    </p>
+                    <button
+                      onClick={() => setShowLoginModal(true)}
+                      className="w-full py-3 rounded-xl bg-[#123F32] hover:bg-[#25664E] text-white text-sm font-semibold transition-colors shadow-xs cursor-pointer"
+                    >
+                      Google ilə Daxil Ol
+                    </button>
+                  </div>
+                </div>
+              )
             )}
 
             {activePage === 'admin' && (
