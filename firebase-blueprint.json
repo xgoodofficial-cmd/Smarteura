@@ -32,6 +32,33 @@
       },
       "required": ["fullName", "email", "serviceId", "projectBrief"]
     },
+    "ClientInquiry": {
+      "title": "ClientInquiry",
+      "description": "B2B client inquiries for industrial projects",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "referenceId": { "type": "string", "maxLength": 64 },
+        "companyName": { "type": "string", "maxLength": 150 },
+        "contactPerson": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["companyName", "contactPerson", "email"]
+    },
+    "CandidateApplication": {
+      "title": "CandidateApplication",
+      "description": "Job and workforce applications submitted by candidates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "referenceId": { "type": "string", "maxLength": 64 },
+        "fullName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "email"]
+    },
     "TestConnection": {
       "title": "TestConnection",
       "description": "Test doc for verifying connection",
@@ -44,11 +71,19 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "User profile collection accessible by the owner"
+      "description": "User profile collection accessible by the owner or admin"
     },
     "/contact_submissions/{submissionId}": {
       "schema": "ContactSubmission",
-      "description": "Contact inquiries submitted by users"
+      "description": "Contact inquiries submitted by users and readable only by admins"
+    },
+    "/client_inquiries/{inquiryId}": {
+      "schema": "ClientInquiry",
+      "description": "Industrial client project inquiries accessible strictly to admins"
+    },
+    "/candidate_applications/{applicationId}": {
+      "schema": "CandidateApplication",
+      "description": "Candidate CV and trade applications accessible strictly to admins"
     },
     "/test/{docId}": {
       "schema": "TestConnection",

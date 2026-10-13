@@ -16,6 +16,7 @@ import { translations } from '../data/translations';
 import { saveInquiry, saveContactMessage } from '../data/initialData';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { validateUploadFile, sanitizeInput, sanitizeTel, sanitizeMailto } from '../lib/security';
 
 interface ContactsPageProps {
   lang: Language;
@@ -54,17 +55,18 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
   const [clientSuccessRef, setClientSuccessRef] = useState<string | null>(null);
 
-  // Multi-file handler (Section 23)
+  // Secure Multi-file handler with strict format and extension filtering
   const handleClientFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     setClientFileError(null);
     if (!e.target.files) return;
 
     const filesArray = Array.from(e.target.files);
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB per file
+    const ALLOWED_EXTS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'dwg', 'dxf', 'step', 'stp', 'png', 'jpg', 'jpeg', 'zip'];
 
     for (const f of filesArray) {
-      if (f.size > MAX_SIZE) {
-        setClientFileError(`File "${f.name}" exceeds the 10 MB limit.`);
+      const check = validateUploadFile(f, ALLOWED_EXTS, 10 * 1024 * 1024);
+      if (!check.isValid) {
+        setClientFileError(check.error || 'Fayl təhlükəsizlik qaydalarına uyğun deyil.');
         return;
       }
     }
@@ -76,11 +78,16 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
     setClientFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Error states
+  const [genError, setGenError] = useState<string | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+
   // Submit General Message
   const handleSubmitGeneral = (e: React.FormEvent) => {
     e.preventDefault();
+    setGenError(null);
     if (!genName.trim() || !genEmail.trim() || !genMessage.trim()) {
-      alert('Please fill the mandatory fields (Name, Email, Message).');
+      setGenError('Zəhmət olmasa tələb olunan xanaları (Ad, Email, Mesaj) doldurun.');
       return;
     }
 
@@ -93,11 +100,11 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       const newMsg: GeneralContactMessage = {
         id: `msg-${Date.now()}`,
         referenceId,
-        name: genName.trim(),
-        company: genCompany.trim() || undefined,
-        email: genEmail.trim(),
-        phone: genPhone.trim() || undefined,
-        message: genMessage.trim(),
+        name: sanitizeInput(genName.trim(), 100),
+        company: genCompany.trim() ? sanitizeInput(genCompany.trim(), 150) : undefined,
+        email: sanitizeInput(genEmail.trim(), 120),
+        phone: genPhone.trim() ? sanitizeInput(genPhone.trim(), 50) : undefined,
+        message: sanitizeInput(genMessage.trim(), 2000),
         createdAt: new Date().toISOString(),
         status: 'new'
       };
@@ -120,8 +127,9 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
   // Submit Client Project Inquiry
   const handleSubmitClient = (e: React.FormEvent) => {
     e.preventDefault();
+    setClientError(null);
     if (!clientCompany.trim() || !clientContactPerson.trim() || !clientEmail.trim() || !clientCountry.trim()) {
-      alert('Please provide Company name, Contact person, Email, and Project Country.');
+      setClientError('Zəhmət olmasa şirkət adı, əlaqəli şəxs, email və layihə ölkəsini qeyd edin.');
       return;
     }
 
@@ -217,7 +225,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                     {t.emailInquiries}
                   </span>
                   <a
-                    href={`mailto:${settings.publicEmail}`}
+                    href={sanitizeMailto(settings.publicEmail)}
                     className="inline-flex items-center gap-2 font-mono font-bold text-sm text-[#123F32] hover:underline mt-0.5"
                   >
                     <Mail className="w-4 h-4 text-[#96B5A1]" />
@@ -230,7 +238,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                     {t.emailOffice}
                   </span>
                   <a
-                    href={`mailto:${settings.officeEmail}`}
+                    href={sanitizeMailto(settings.officeEmail)}
                     className="inline-flex items-center gap-2 font-mono font-bold text-sm text-[#123F32] hover:underline mt-0.5"
                   >
                     <Mail className="w-4 h-4 text-[#96B5A1]" />
@@ -243,7 +251,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                     {t.emailInvoices}
                   </span>
                   <a
-                    href={`mailto:${settings.invoicesEmail}`}
+                    href={sanitizeMailto(settings.invoicesEmail)}
                     className="inline-flex items-center gap-2 font-mono font-bold text-sm text-[#123F32] hover:underline mt-0.5"
                   >
                     <Mail className="w-4 h-4 text-[#96B5A1]" />
@@ -258,7 +266,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                       Direct Telephone
                     </span>
                     <a
-                      href={`tel:${settings.phone.replace(/\s+/g, '')}`}
+                      href={sanitizeTel(settings.phone)}
                       className="inline-flex items-center gap-2 font-mono font-bold text-sm text-[#123F32] hover:underline mt-0.5"
                     >
                       <Phone className="w-4 h-4 text-[#96B5A1]" />
@@ -357,6 +365,13 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                       <p className="text-xs text-[#586B62] mb-4">
                         {t.clientSubtitle}
                       </p>
+
+                      {clientError && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                          <span>{clientError}</span>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -575,6 +590,13 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                       <p className="text-xs text-[#586B62] mb-4">
                         {t.generalSubtitle}
                       </p>
+
+                      {genError && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                          <span>{genError}</span>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>

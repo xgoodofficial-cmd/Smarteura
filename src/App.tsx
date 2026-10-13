@@ -31,7 +31,17 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { LoginModal } from './components/LoginModal';
 import { Custom3DCursor } from './components/Custom3DCursor';
 import { WorkspaceHub } from './components/WorkspaceHub';
-import { onUserAuthStateChanged, logoutUser } from './lib/firebase';
+import {
+  onUserAuthStateChanged,
+  logoutUser,
+  fetchCloudCandidateApplications,
+  fetchCloudClientInquiries
+} from './lib/firebase';
+import {
+  verifyAdminSession,
+  clearAdminSession,
+  isAuthorizedAdminEmail
+} from './lib/security';
 import type { User } from 'firebase/auth';
 
 export default function App() {
@@ -40,14 +50,8 @@ export default function App() {
   // Active navigation page
   const [activePage, setActivePage] = useState<string>('home');
 
-  // Secret Admin Authentication & Modal State
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem('smarteura_admin_auth') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Secure Admin Authentication & Modal State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [showAdminLoginModal, setShowAdminLoginModal] = useState<boolean>(false);
   const [showWorkspaceModal, setShowWorkspaceModal] = useState<boolean>(false);
 
@@ -55,10 +59,28 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState<boolean>(false);
 
+  // Validate secure signed admin session on mount
+  useEffect(() => {
+    verifyAdminSession().then((valid) => {
+      setIsAdminAuthenticated(valid);
+    });
+  }, []);
+
   // Listen to Firebase Auth state
   useEffect(() => {
     const unsubscribe = onUserAuthStateChanged((user) => {
       setCurrentUser(user);
+      if (user && isAuthorizedAdminEmail(user.email)) {
+        setIsAdminAuthenticated(true);
+        // Automatically stream cloud data from Google Cloud Firestore
+        Promise.all([
+          fetchCloudCandidateApplications().catch(() => null),
+          fetchCloudClientInquiries().catch(() => null)
+        ]).then(([cloudApps, cloudInqs]) => {
+          if (cloudApps && cloudApps.length > 0) setApplications(cloudApps);
+          if (cloudInqs && cloudInqs.length > 0) setInquiries(cloudInqs);
+        });
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -74,7 +96,7 @@ export default function App() {
 
   // Sync route on mount from hash if present
   useEffect(() => {
-    const handleHash = () => {
+    const handleHash = async () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (['services', 'projects', 'gallery', 'career', 'about', 'news', 'contacts', 'cabinet'].includes(hash)) {
         if (hash === 'cabinet' && !currentUser) {
@@ -84,10 +106,12 @@ export default function App() {
       } else if (hash === 'workspace') {
         setShowWorkspaceModal(true);
       } else if (hash === 'admin') {
-        const authed = sessionStorage.getItem('smarteura_admin_auth') === 'true';
+        const authed = await verifyAdminSession();
         if (authed) {
+          setIsAdminAuthenticated(true);
           setActivePage('admin');
         } else {
+          setIsAdminAuthenticated(false);
           setActivePage('home');
           window.location.hash = '';
           setShowAdminLoginModal(true);
@@ -107,30 +131,40 @@ export default function App() {
   };
 
   const handleAdminLoginSuccess = () => {
-    try {
-      sessionStorage.setItem('smarteura_admin_auth', 'true');
-    } catch {}
     setIsAdminAuthenticated(true);
     setShowAdminLoginModal(false);
     handleNavigate('admin');
   };
 
   const handleAdminLogout = () => {
-    try {
-      sessionStorage.removeItem('smarteura_admin_auth');
-    } catch {}
+    clearAdminSession();
     setIsAdminAuthenticated(false);
     handleNavigate('home');
   };
 
-  const handleRefreshData = () => {
+  const handleRefreshData = async () => {
     setSettings(getStoredSettings());
     setVacancies(getStoredVacancies());
-    setApplications(getStoredApplications());
-    setInquiries(getStoredInquiries());
     setProjects(getStoredProjects());
     setGallery(getStoredGallery());
     setNews(getStoredNews());
+
+    if (currentUser && isAuthorizedAdminEmail(currentUser.email)) {
+      try {
+        const [cloudApps, cloudInqs] = await Promise.all([
+          fetchCloudCandidateApplications().catch(() => null),
+          fetchCloudClientInquiries().catch(() => null)
+        ]);
+        if (cloudApps) setApplications(cloudApps);
+        if (cloudInqs) setInquiries(cloudInqs);
+        return;
+      } catch (e) {
+        console.warn('Live cloud sync warning:', e);
+      }
+    }
+
+    setApplications(getStoredApplications());
+    setInquiries(getStoredInquiries());
   };
 
   return (
@@ -329,6 +363,8 @@ export default function App() {
                 onUpdateProjects={setProjects}
                 onUpdateNews={setNews}
                 onRefreshData={handleRefreshData}
+                onSyncCloudApplications={setApplications}
+                onSyncCloudInquiries={setInquiries}
                 isAuthenticated={isAdminAuthenticated}
                 onLoginSuccess={handleAdminLoginSuccess}
                 onLogout={handleAdminLogout}

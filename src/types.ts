@@ -51,6 +51,7 @@ export interface CandidateApplication {
   cvFileName?: string;
   cvFileSize?: string;
   cvFileType?: string;
+  cvDataUrl?: string;
   futureConsent: boolean;
   appliedVacancyId?: string;
   appliedVacancyTitle?: string;

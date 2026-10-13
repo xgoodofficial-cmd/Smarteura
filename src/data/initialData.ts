@@ -209,8 +209,7 @@ const STORAGE_KEYS = {
   CONTACT_MESSAGES: 'smarteura_contact_messages',
   PROJECTS: 'smarteura_projects',
   GALLERY: 'smarteura_gallery',
-  NEWS: 'smarteura_news',
-  ADMIN_SESSION: 'smarteura_admin_session'
+  NEWS: 'smarteura_news'
 };
 
 export const getStoredSettings = (): SiteSettings => {
@@ -223,8 +222,20 @@ export const getStoredSettings = (): SiteSettings => {
       }
       if (!parsed.socialLinks) {
         parsed.socialLinks = { ...INITIAL_SETTINGS.socialLinks };
-      } else if (!parsed.socialLinks.facebook) {
-        parsed.socialLinks.facebook = 'https://www.facebook.com/smarteura';
+      } else {
+        // Enforce safe https URL schemes against localStorage tampering
+        if (parsed.socialLinks.linkedin && !/^https:\/\//i.test(parsed.socialLinks.linkedin.trim())) {
+          parsed.socialLinks.linkedin = undefined;
+        }
+        if (parsed.socialLinks.facebook && !/^https:\/\//i.test(parsed.socialLinks.facebook.trim())) {
+          parsed.socialLinks.facebook = 'https://www.facebook.com/smarteura';
+        }
+        if (parsed.socialLinks.instagram && !/^https:\/\//i.test(parsed.socialLinks.instagram.trim())) {
+          parsed.socialLinks.instagram = undefined;
+        }
+        if (parsed.socialLinks.youtube && !/^https:\/\//i.test(parsed.socialLinks.youtube.trim())) {
+          parsed.socialLinks.youtube = undefined;
+        }
       }
       return parsed;
     }

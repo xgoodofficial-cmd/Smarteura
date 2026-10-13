@@ -7,7 +7,17 @@ import {
   onAuthStateChanged,
   User
 } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, setDoc } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDocFromServer,
+  setDoc,
+  collection,
+  getDocs,
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
+import type { CandidateApplication, ClientInquiry } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -222,5 +232,107 @@ export async function testFirestoreConnection(): Promise<{ success: boolean; mes
     }
     // Attempting a write or checking fallback
     return { success: true, message: 'Firestore initialized in europe-west2.' };
+  }
+}
+
+/**
+ * Fetch all candidate applications directly from Google Cloud Firestore.
+ * Requires authenticated admin session (e.g. xgoodofficial@gmail.com).
+ * Protected by server-side Firestore Security Rules.
+ */
+export async function fetchCloudCandidateApplications(): Promise<CandidateApplication[]> {
+  try {
+    const colRef = collection(db, 'candidate_applications');
+    const snapshot = await getDocs(colRef);
+    const list: CandidateApplication[] = [];
+    snapshot.forEach((docSnap) => {
+      list.push(docSnap.data() as CandidateApplication);
+    });
+    // Sort descending by creation date
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Firestore fetchCloudCandidateApplications warning:', err);
+    throw err;
+  }
+}
+
+/**
+ * Fetch all client inquiries directly from Google Cloud Firestore.
+ * Requires authenticated admin session (e.g. xgoodofficial@gmail.com).
+ * Protected by server-side Firestore Security Rules.
+ */
+export async function fetchCloudClientInquiries(): Promise<ClientInquiry[]> {
+  try {
+    const colRef = collection(db, 'client_inquiries');
+    const snapshot = await getDocs(colRef);
+    const list: ClientInquiry[] = [];
+    snapshot.forEach((docSnap) => {
+      list.push(docSnap.data() as ClientInquiry);
+    });
+    // Sort descending by creation date
+    list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return list;
+  } catch (err) {
+    console.warn('Firestore fetchCloudClientInquiries warning:', err);
+    throw err;
+  }
+}
+
+/**
+ * Update candidate application in Google Cloud Firestore.
+ */
+export async function updateCloudCandidateApplication(
+  id: string,
+  updates: Partial<CandidateApplication>
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'candidate_applications', id);
+    await updateDoc(docRef, updates);
+  } catch (err) {
+    console.warn('Firestore updateCloudCandidateApplication error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Update client inquiry in Google Cloud Firestore.
+ */
+export async function updateCloudClientInquiry(
+  id: string,
+  updates: Partial<ClientInquiry>
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'client_inquiries', id);
+    await updateDoc(docRef, updates);
+  } catch (err) {
+    console.warn('Firestore updateCloudClientInquiry error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete candidate application from Google Cloud Firestore.
+ */
+export async function deleteCloudCandidateApplication(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'candidate_applications', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firestore deleteCloudCandidateApplication error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete client inquiry from Google Cloud Firestore.
+ */
+export async function deleteCloudClientInquiry(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'client_inquiries', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firestore deleteCloudClientInquiry error:', err);
+    throw err;
   }
 }

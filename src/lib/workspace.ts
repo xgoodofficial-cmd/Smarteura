@@ -1,7 +1,4 @@
-/**
- * Google Workspace (Drive & Gmail) Integration Service
- * Follows Google Workspace API specifications and safety requirements.
- */
+import { validateUploadFile, sanitizeSingleLine, sanitizeInput } from './security';
 
 export interface DriveFileItem {
   id: string;
@@ -74,12 +71,26 @@ export async function uploadFileToDrive(
   file: File,
   folderId?: string
 ): Promise<DriveFileItem> {
+  const fileCheck = validateUploadFile(
+    file,
+    ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'png', 'jpg', 'jpeg', 'zip', 'dwg', 'dxf'],
+    25 * 1024 * 1024
+  );
+  if (!fileCheck.isValid) {
+    throw new Error(fileCheck.error || 'File validation failed');
+  }
+
+  const cleanName = sanitizeSingleLine(file.name, 180);
+
   const metadata: any = {
-    name: file.name,
+    name: cleanName,
     mimeType: file.type || 'application/octet-stream',
   };
 
   if (folderId) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(folderId)) {
+      throw new Error('Invalid folder identifier');
+    }
     metadata.parents = [folderId];
   }
 
@@ -117,11 +128,19 @@ export async function createDriveFolder(
   folderName: string,
   parentId?: string
 ): Promise<DriveFileItem> {
+  const cleanFolderName = sanitizeSingleLine(folderName, 100);
+  if (!cleanFolderName) {
+    throw new Error('Folder name cannot be empty');
+  }
+
   const metadata: any = {
-    name: folderName,
+    name: cleanFolderName,
     mimeType: 'application/vnd.google-apps.folder',
   };
   if (parentId) {
+    if (!/^[a-zA-Z0-9_\-]+$/.test(parentId)) {
+      throw new Error('Invalid parent folder identifier');
+    }
     metadata.parents = [parentId];
   }
 
@@ -150,6 +169,10 @@ export async function deleteDriveFile(
   accessToken: string,
   fileId: string
 ): Promise<void> {
+  if (!/^[a-zA-Z0-9_\-]+$/.test(fileId)) {
+    throw new Error('Invalid file identifier');
+  }
+
   const response = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}`,
     {
@@ -256,14 +279,22 @@ export async function sendGmailEmail(
     bodyText: string;
   }
 ): Promise<{ id: string; threadId: string }> {
-  const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(params.subject)))}?=`;
+  const cleanTo = sanitizeSingleLine(params.to, 250);
+  if (!cleanTo || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanTo)) {
+    throw new Error('Etibarsız email ünvanı (Invalid recipient email address).');
+  }
+
+  const cleanSubject = sanitizeSingleLine(params.subject, 200) || '(No Subject)';
+  const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(cleanSubject)))}?=`;
+  const cleanBody = sanitizeInput(params.bodyText, 50000);
+
   const messageParts = [
-    `To: ${params.to}`,
+    `To: ${cleanTo}`,
     'Content-Type: text/plain; charset=utf-8',
     'MIME-Version: 1.0',
     `Subject: ${utf8Subject}`,
     '',
-    params.bodyText,
+    cleanBody,
   ];
   const rawMessage = messageParts.join('\r\n');
 

@@ -23,7 +23,14 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Default deny all
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email in ['xgoodofficial@gmail.com', 'admin@smarteura.eu', 'office@smarteura.eu'] ||
+        request.auth.token.admin == true
+      );
+    }
+
+    // Default deny all unknown collections
     match /{document=**} {
       allow read, write: if false;
     }
@@ -34,25 +41,41 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Users collection
+    // Users collection - strictly isolated per user; admins can audit
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false;
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
       allow create, update: if isOwner(userId)
         && incoming().uid == request.auth.uid
         && incoming().email is string
         && incoming().email.size() <= 256;
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
-    // Contact submissions
+    // Contact submissions - Public write with field validation, Admin-only read/manage
     match /contact_submissions/{submissionId} {
       allow create: if isValidId(submissionId)
         && incoming().fullName is string && incoming().fullName.size() <= 120
         && incoming().email is string && incoming().email.size() <= 160
         && incoming().projectBrief is string && incoming().projectBrief.size() <= 2000;
-      allow read: if isSignedIn();
-      allow update, delete: if false;
+      allow read, list, update, delete: if isAdmin();
+    }
+
+    // Client Inquiries - Public write with field validation, Admin-only read/manage
+    match /client_inquiries/{inquiryId} {
+      allow create: if isValidId(inquiryId)
+        && incoming().companyName is string && incoming().companyName.size() <= 150
+        && incoming().contactPerson is string && incoming().contactPerson.size() <= 120
+        && incoming().email is string && incoming().email.size() <= 160;
+      allow read, list, update, delete: if isAdmin();
+    }
+
+    // Candidate Applications - Public application submission, Admin-only read/manage
+    match /candidate_applications/{applicationId} {
+      allow create: if isValidId(applicationId)
+        && incoming().fullName is string && incoming().fullName.size() <= 120
+        && incoming().email is string && incoming().email.size() <= 160;
+      allow read, list, update, delete: if isAdmin();
     }
   }
 }

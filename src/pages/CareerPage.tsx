@@ -10,7 +10,8 @@ import {
   Shield,
   Clock,
   ArrowRight,
-  Filter
+  Filter,
+  AlertCircle
 } from 'lucide-react';
 import { Language, Vacancy, CandidateApplication } from '../types';
 import { translations } from '../data/translations';
@@ -18,6 +19,7 @@ import { saveApplication } from '../data/initialData';
 import { db, getCachedAccessToken } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { uploadFileToDrive } from '../lib/workspace';
+import { validateUploadFile, sanitizeInput } from '../lib/security';
 
 interface CareerPageProps {
   lang: Language;
@@ -61,6 +63,7 @@ export const CareerPage: React.FC<CareerPageProps> = ({
   // File state
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [appFormError, setAppFormError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState<{
@@ -84,24 +87,16 @@ export const CareerPage: React.FC<CareerPageProps> = ({
 
   const availableCountries = Array.from(new Set(activeVacancies.map((v) => v.country)));
 
-  // File handling with strict 10MB limit and format validation
+  // File handling with strict security verification
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
-    const allowedExtensions = ['pdf', 'doc', 'docx'];
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    const check = validateUploadFile(file, ['pdf', 'doc', 'docx'], 10 * 1024 * 1024);
 
-    if (!allowedExtensions.includes(fileExt)) {
-      setFileError('Only PDF, DOC, or DOCX files are permitted.');
-      return;
-    }
-
-    // 10 MB max: 10 * 1024 * 1024 bytes
-    const MAX_SIZE = 10 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      setFileError('File exceeds 10 MB limit. Please upload a smaller file.');
+    if (!check.isValid) {
+      setFileError(check.error || 'Only PDF, DOC, or DOCX files are permitted.');
       return;
     }
 
@@ -119,19 +114,22 @@ export const CareerPage: React.FC<CareerPageProps> = ({
     }
     setSubmissionSuccess(null);
     setFileError(null);
+    setAppFormError(null);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedVacancy(null);
+    setAppFormError(null);
   };
 
   const handleSubmitApplication = (e: React.FormEvent) => {
     e.preventDefault();
+    setAppFormError(null);
 
     if (!fullName.trim() || !email.trim() || !phone.trim()) {
-      alert('Please fill all mandatory contact fields (Full Name, Email, Phone).');
+      setAppFormError('Zəhmət olmasa tələb olunan əlaqə xanalarını (Ad, Soyad, Email, Telefon) doldurun.');
       return;
     }
 
@@ -154,7 +152,7 @@ export const CareerPage: React.FC<CareerPageProps> = ({
       });
     }, 150);
 
-    setTimeout(() => {
+    const processSubmission = (dataUrl?: string) => {
       clearInterval(progressTimer);
       setUploadProgress(100);
 
@@ -185,6 +183,7 @@ export const CareerPage: React.FC<CareerPageProps> = ({
         cvFileName: cvFile ? cvFile.name : undefined,
         cvFileSize: cvFile ? `${(cvFile.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
         cvFileType: cvFile ? cvFile.type : undefined,
+        cvDataUrl: dataUrl,
         futureConsent,
         appliedVacancyId: selectedVacancy ? selectedVacancy.id : undefined,
         appliedVacancyTitle: selectedVacancy ? selectedVacancy.title[lang] : undefined,
@@ -232,7 +231,21 @@ export const CareerPage: React.FC<CareerPageProps> = ({
       setEmail('');
       setPhone('');
       setCvFile(null);
-    }, 800);
+    };
+
+    if (cvFile && cvFile.size <= 700 * 1024) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        setTimeout(() => processSubmission(dataUrl), 600);
+      };
+      reader.onerror = () => {
+        setTimeout(() => processSubmission(undefined), 600);
+      };
+      reader.readAsDataURL(cvFile);
+    } else {
+      setTimeout(() => processSubmission(undefined), 800);
+    }
   };
 
   return (
@@ -503,6 +516,13 @@ export const CareerPage: React.FC<CareerPageProps> = ({
                 </div>
 
                 <form onSubmit={handleSubmitApplication} className="space-y-4">
+                  {appFormError && (
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                      <span>{appFormError}</span>
+                    </div>
+                  )}
+
                   {/* Basic Mandatory Fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>

@@ -3,6 +3,7 @@ import { Mail, Phone, Linkedin, Facebook, Instagram, Youtube } from 'lucide-reac
 import { Language, SiteSettings } from '../types';
 import { translations } from '../data/translations';
 import { SmarteuraLogo } from './SmarteuraLogo';
+import { sanitizeUrl, sanitizeTel, sanitizeMailto } from '../lib/security';
 
 interface FooterProps {
   currentLang: Language;
@@ -143,7 +144,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
             <ul className="space-y-2.5 text-xs">
               <li>
                 <a
-                  href={`mailto:${settings.publicEmail}`}
+                  href={sanitizeMailto(settings.publicEmail)}
                   className="flex items-center gap-2 text-[#D5DED6] hover:text-white transition-colors"
                 >
                   <Mail className="w-3.5 h-3.5 text-[#96B5A1] shrink-0" />
@@ -152,7 +153,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
               </li>
               <li>
                 <a
-                  href={`mailto:${settings.officeEmail}`}
+                  href={sanitizeMailto(settings.officeEmail)}
                   className="flex items-center gap-2 text-[#D5DED6] hover:text-white transition-colors"
                 >
                   <Mail className="w-3.5 h-3.5 text-[#96B5A1] shrink-0" />
@@ -161,7 +162,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
               </li>
               <li>
                 <a
-                  href={`mailto:${settings.invoicesEmail}`}
+                  href={sanitizeMailto(settings.invoicesEmail)}
                   className="flex items-center gap-2 text-[#D5DED6] hover:text-white transition-colors"
                 >
                   <Mail className="w-3.5 h-3.5 text-[#96B5A1] shrink-0" />
@@ -173,7 +174,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
               {settings.phone && settings.phone.trim().length > 0 && (
                 <li id="footer-phone-container" className="pt-1">
                   <a
-                    href={`tel:${settings.phone.replace(/\s+/g, '')}`}
+                    href={sanitizeTel(settings.phone)}
                     className="flex items-center gap-2 text-white font-medium hover:text-[#96B5A1] transition-colors"
                   >
                     <Phone className="w-3.5 h-3.5 text-[#96B5A1] shrink-0" />
@@ -208,7 +209,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
 
                 {settings.socialLinks.linkedin && (
                   <a
-                    href={settings.socialLinks.linkedin}
+                    href={sanitizeUrl(settings.socialLinks.linkedin)}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Smarteura on LinkedIn"
@@ -219,7 +220,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
                 )}
                 {(settings.socialLinks.facebook || 'https://www.facebook.com/smarteura') && (
                   <a
-                    href={settings.socialLinks.facebook || 'https://www.facebook.com/smarteura'}
+                    href={sanitizeUrl(settings.socialLinks.facebook || 'https://www.facebook.com/smarteura')}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Smarteura on Facebook"
@@ -230,7 +231,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
                 )}
                 {settings.socialLinks.instagram && (
                   <a
-                    href={settings.socialLinks.instagram}
+                    href={sanitizeUrl(settings.socialLinks.instagram)}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Smarteura on Instagram"
@@ -241,7 +242,7 @@ export const Footer: React.FC<FooterProps> = ({ currentLang, onNavigate, setting
                 )}
                 {settings.socialLinks.youtube && (
                   <a
-                    href={settings.socialLinks.youtube}
+                    href={sanitizeUrl(settings.socialLinks.youtube)}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Smarteura on YouTube"

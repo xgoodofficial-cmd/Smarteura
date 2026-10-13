@@ -1,0 +1,6 @@
+{
+  "summary":  "Comprehensive security and architecture plan for safely publishing Smart Eura to a public GitHub repository. Details the strategy for keeping sensitive applicant CVs and client databases strictly isolated in Google Cloud Firestore under verified RBAC rules, while deploying only clean static bundles without exposing any private database records or credentials.",
+  "updatedAt":  "2026-10-09T19:30:43.263475340Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
