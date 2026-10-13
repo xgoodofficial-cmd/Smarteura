@@ -104,7 +104,11 @@ export const WorkspaceHub: React.FC<WorkspaceHubProps> = ({ initialTab = 'drive'
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err?.message || 'Failed to authenticate with Google.');
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        setErrorMsg('Domain not authorized (auth/unauthorized-domain): Please add "smarteura.eu" to Firebase Console -> Authentication -> Settings -> Authorized Domains.');
+      } else {
+        setErrorMsg(err?.message || 'Failed to authenticate with Google.');
+      }
     } finally {
       setIsLoading(false);
     }

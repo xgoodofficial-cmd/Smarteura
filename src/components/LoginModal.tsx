@@ -130,6 +130,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         setErrorMessage(null);
       } else if (err?.code === 'auth/cancelled-popup-request') {
         setErrorMessage(null);
+      } else if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        setErrorMessage(
+          'Domen icazəsi tələb olunur (auth/unauthorized-domain): "smarteura.eu" domeni Firebase Console -> Authentication -> Settings -> Authorized Domains bölməsində icazəli domenlər siyahısına əlavə edilməlidir.'
+        );
       } else {
         setErrorMessage(err?.message || t.errorGeneric);
       }

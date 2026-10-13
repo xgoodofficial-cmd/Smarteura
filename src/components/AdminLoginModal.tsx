@@ -136,7 +136,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       }
     } catch (e: any) {
       setIsSubmitting(false);
-      setError('Google ilə daxil olarkən xəta baş verdi.');
+      if (e?.code === 'auth/unauthorized-domain' || e?.message?.includes('unauthorized-domain')) {
+        setError(
+          'Domen icazəsi xətası (auth/unauthorized-domain): "smarteura.eu" domeni Firebase Console -> Authentication -> Settings -> Authorized Domains siyahısına əlavə edilməlidir. Bu müddətdə yuxarıdakı Admin İstifadəçi adı və Şifrəsi ilə daxil ola bilərsiniz.'
+        );
+      } else {
+        setError(e?.message || 'Google ilə daxil olarkən xəta baş verdi.');
+      }
     }
   };
 
