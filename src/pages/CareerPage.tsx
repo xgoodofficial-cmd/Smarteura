@@ -11,7 +11,8 @@ import {
   Clock,
   ArrowRight,
   Filter,
-  AlertCircle
+  AlertCircle,
+  Mail
 } from 'lucide-react';
 import { Language, Vacancy, CandidateApplication } from '../types';
 import { translations } from '../data/translations';
@@ -20,6 +21,7 @@ import { db, getCachedAccessToken } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { uploadFileToDrive } from '../lib/workspace';
 import { validateUploadFile, sanitizeInput } from '../lib/security';
+import { notifyOfficeNewCandidateApplication, TARGET_OFFICE_EMAIL } from '../lib/emailNotification';
 
 interface CareerPageProps {
   lang: Language;
@@ -208,6 +210,11 @@ export const CareerPage: React.FC<CareerPageProps> = ({
       } catch (err) {
         console.warn('Firestore write warning:', err);
       }
+
+      // Automatically dispatch email notification to office@smarteura.eu
+      notifyOfficeNewCandidateApplication(newApp).catch((err) => {
+        console.warn('Email notification to office@smarteura.eu note:', err);
+      });
 
       // If authorized with Google Drive, upload CV automatically
       const driveToken = getCachedAccessToken();
@@ -458,7 +465,7 @@ export const CareerPage: React.FC<CareerPageProps> = ({
                   {t.successMessage}
                 </p>
 
-                <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-6 text-left">
+                <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-4 text-left">
                   <span className="text-[10px] uppercase font-bold text-[#586B62] tracking-wider block">
                     Unique Application Reference ID:
                   </span>
@@ -470,9 +477,14 @@ export const CareerPage: React.FC<CareerPageProps> = ({
                   </span>
                 </div>
 
+                <div className="flex items-center justify-center gap-2 text-xs text-[#123F32] bg-emerald-50 border border-emerald-200/80 rounded-xl py-2 px-3 max-w-xs mx-auto mb-6">
+                  <Mail className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Müraciət həmçinin <strong>{TARGET_OFFICE_EMAIL}</strong> ünvanına göndərildi.</span>
+                </div>
+
                 <button
                   onClick={handleCloseModal}
-                  className="px-6 py-2.5 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E]"
+                  className="px-6 py-2.5 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E] cursor-pointer"
                 >
                   Close Window
                 </button>

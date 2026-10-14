@@ -83,8 +83,8 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ lang, gallery, onNavig
         {/* Gallery Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {filteredItems.map((item) => {
-            const title = item.title[lang] || item.title.en;
-            const description = item.description[lang] || item.description.en;
+            const title = typeof item.title === 'string' ? item.title : (item.title?.[lang] || item.title?.en || 'Worksite');
+            const description = typeof item.description === 'string' ? item.description : (item.description?.[lang] || item.description?.en || '');
 
             return (
               <div
@@ -194,7 +194,7 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ lang, gallery, onNavig
             <div className="relative aspect-16/10 bg-[#193E33] max-h-[60vh] overflow-hidden">
               <img
                 src={selectedItem.imageUrl}
-                alt={selectedItem.title[lang] || selectedItem.title.en}
+                alt={typeof selectedItem.title === 'string' ? selectedItem.title : (selectedItem.title?.[lang] || selectedItem.title?.en || 'Worksite')}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -208,11 +208,11 @@ export const GalleryPage: React.FC<GalleryPageProps> = ({ lang, gallery, onNavig
             {/* Modal Details */}
             <div className="p-6 sm:p-8">
               <h2 className="text-xl sm:text-2xl font-bold text-[#193E33] mb-3">
-                {selectedItem.title[lang] || selectedItem.title.en}
+                {typeof selectedItem.title === 'string' ? selectedItem.title : (selectedItem.title?.[lang] || selectedItem.title?.en || 'Worksite')}
               </h2>
 
               <p className="text-sm sm:text-base text-[#586B62] leading-relaxed mb-6">
-                {selectedItem.description[lang] || selectedItem.description.en}
+                {typeof selectedItem.description === 'string' ? selectedItem.description : (selectedItem.description?.[lang] || selectedItem.description?.en || '')}
               </p>
 
               <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-[#D5DED6]">

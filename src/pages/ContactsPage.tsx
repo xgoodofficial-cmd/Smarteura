@@ -17,6 +17,11 @@ import { saveInquiry, saveContactMessage } from '../data/initialData';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { validateUploadFile, sanitizeInput, sanitizeTel, sanitizeMailto } from '../lib/security';
+import {
+  notifyOfficeNewClientInquiry,
+  notifyOfficeNewContactMessage,
+  TARGET_OFFICE_EMAIL
+} from '../lib/emailNotification';
 
 interface ContactsPageProps {
   lang: Language;
@@ -110,6 +115,29 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       };
 
       saveContactMessage(newMsg);
+
+      // Async sync to Firebase Firestore
+      try {
+        setDoc(doc(db, 'contact_submissions', newMsg.id), {
+          fullName: newMsg.name,
+          email: newMsg.email,
+          phone: newMsg.phone || '',
+          serviceId: 'general_contact',
+          projectBrief: newMsg.message,
+          createdAt: newMsg.createdAt,
+          status: 'new'
+        }).catch((err) => {
+          console.warn('Firestore contact message sync note:', err);
+        });
+      } catch (err) {
+        console.warn('Firestore contact write warning:', err);
+      }
+
+      // Automatically dispatch email notification to office@smarteura.eu
+      notifyOfficeNewContactMessage(newMsg).catch((err) => {
+        console.warn('Email notification to office@smarteura.eu note:', err);
+      });
+
       if (onRefreshData) onRefreshData();
 
       setIsSubmittingGen(false);
@@ -176,6 +204,11 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
       } catch (err) {
         console.warn('Firestore write warning:', err);
       }
+
+      // Automatically dispatch email notification to office@smarteura.eu
+      notifyOfficeNewClientInquiry(newInquiry).catch((err) => {
+        console.warn('Email notification to office@smarteura.eu note:', err);
+      });
 
       if (onRefreshData) onRefreshData();
 
@@ -341,7 +374,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                         {t.successSubheading}
                       </p>
 
-                      <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-6 text-left">
+                      <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-4 text-left">
                         <span className="text-[10px] uppercase font-bold text-[#586B62] tracking-wider block">
                           {t.referenceNumber}:
                         </span>
@@ -353,9 +386,14 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                         </span>
                       </div>
 
+                      <div className="flex items-center justify-center gap-2 text-xs text-[#123F32] bg-emerald-50 border border-emerald-200/80 rounded-xl py-2 px-3 max-w-xs mx-auto mb-6">
+                        <Mail className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Sorğu rəsmi <strong>{TARGET_OFFICE_EMAIL}</strong> ünvanına yönləndirildi.</span>
+                      </div>
+
                       <button
                         onClick={() => setClientSuccessRef(null)}
-                        className="px-5 py-2 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E]"
+                        className="px-5 py-2.5 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E] cursor-pointer"
                       >
                         Submit Another Inquiry
                       </button>
@@ -569,7 +607,7 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                         {t.successSubheading}
                       </p>
 
-                      <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-6 text-left">
+                      <div className="p-4 rounded-xl bg-[#F8F9F6] border border-[#D5DED6] max-w-xs mx-auto mb-4 text-left">
                         <span className="text-[10px] uppercase font-bold text-[#586B62] tracking-wider block">
                           {t.referenceNumber}:
                         </span>
@@ -578,9 +616,14 @@ export const ContactsPage: React.FC<ContactsPageProps> = ({
                         </strong>
                       </div>
 
+                      <div className="flex items-center justify-center gap-2 text-xs text-[#123F32] bg-emerald-50 border border-emerald-200/80 rounded-xl py-2 px-3 max-w-xs mx-auto mb-6">
+                        <Mail className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Mesaj birbaşa <strong>{TARGET_OFFICE_EMAIL}</strong> ünvanına çatdırıldı.</span>
+                      </div>
+
                       <button
                         onClick={() => setGenSuccessRef(null)}
-                        className="px-5 py-2 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E]"
+                        className="px-5 py-2.5 rounded-xl bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E] cursor-pointer"
                       >
                         Send Another Message
                       </button>

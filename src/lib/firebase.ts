@@ -17,7 +17,7 @@ import {
   updateDoc,
   deleteDoc
 } from 'firebase/firestore';
-import type { CandidateApplication, ClientInquiry } from '../types';
+import type { CandidateApplication, ClientInquiry, GalleryItem } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
@@ -336,3 +336,48 @@ export async function deleteCloudClientInquiry(id: string): Promise<void> {
     throw err;
   }
 }
+
+/**
+ * Fetch all gallery items from Google Cloud Firestore.
+ */
+export async function fetchCloudGallery(): Promise<GalleryItem[]> {
+  try {
+    const colRef = collection(db, 'gallery');
+    const snapshot = await getDocs(colRef);
+    const list: GalleryItem[] = [];
+    snapshot.forEach((docSnap) => {
+      list.push(docSnap.data() as GalleryItem);
+    });
+    return list;
+  } catch (err) {
+    console.warn('Firestore fetchCloudGallery note:', err);
+    return [];
+  }
+}
+
+/**
+ * Save or update gallery item in Google Cloud Firestore.
+ */
+export async function saveCloudGalleryItem(item: GalleryItem): Promise<void> {
+  try {
+    const docRef = doc(db, 'gallery', item.id);
+    await setDoc(docRef, item, { merge: true });
+  } catch (err) {
+    console.warn('Firestore saveCloudGalleryItem error:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete gallery item from Google Cloud Firestore.
+ */
+export async function deleteCloudGalleryItem(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'gallery', id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firestore deleteCloudGalleryItem error:', err);
+    throw err;
+  }
+}
+

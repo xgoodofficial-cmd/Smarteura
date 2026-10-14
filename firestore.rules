@@ -77,5 +77,11 @@ service cloud.firestore {
         && incoming().email is string && incoming().email.size() <= 160;
       allow read, list, update, delete: if isAdmin();
     }
+
+    // Gallery Items - Public read, Admin-only management
+    match /gallery/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

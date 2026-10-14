@@ -24,7 +24,12 @@ import {
   RefreshCw,
   Trash2,
   Eye,
-  Cloud
+  Cloud,
+  Image,
+  Upload,
+  ExternalLink,
+  Sparkles,
+  Send
 } from 'lucide-react';
 import { WorkspaceHub } from '../components/WorkspaceHub';
 import { CloudDbHub } from '../components/CloudDbHub';
@@ -35,7 +40,8 @@ import {
   CandidateApplication,
   ClientInquiry,
   ProjectItem,
-  NewsArticle
+  NewsArticle,
+  GalleryItem
 } from '../types';
 import {
   saveStoredSettings,
@@ -43,7 +49,9 @@ import {
   updateApplication,
   updateInquiry,
   saveStoredProjects,
-  saveStoredNews
+  saveStoredNews,
+  saveStoredGallery,
+  getStoredGallery
 } from '../data/initialData';
 import {
   verifyAdminCredentials,
@@ -61,8 +69,16 @@ import {
   updateCloudClientInquiry,
   deleteCloudCandidateApplication,
   deleteCloudClientInquiry,
-  signInWithGoogle
+  signInWithGoogle,
+  fetchCloudGallery,
+  saveCloudGalleryItem,
+  deleteCloudGalleryItem
 } from '../lib/firebase';
+import {
+  notifyOfficeNewCandidateApplication,
+  notifyOfficeNewClientInquiry,
+  TARGET_OFFICE_EMAIL
+} from '../lib/emailNotification';
 
 interface AdminPageProps {
   settings: SiteSettings;
@@ -71,10 +87,12 @@ interface AdminPageProps {
   inquiries: ClientInquiry[];
   projects: ProjectItem[];
   news: NewsArticle[];
+  gallery?: GalleryItem[];
   onUpdateSettings: (settings: SiteSettings) => void;
   onUpdateVacancies: (vacancies: Vacancy[]) => void;
   onUpdateProjects: (projects: ProjectItem[]) => void;
   onUpdateNews: (news: NewsArticle[]) => void;
+  onUpdateGallery?: (gallery: GalleryItem[]) => void;
   onRefreshData: () => void;
   onSyncCloudApplications?: (apps: CandidateApplication[]) => void;
   onSyncCloudInquiries?: (inqs: ClientInquiry[]) => void;
@@ -90,10 +108,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   inquiries,
   projects,
   news,
+  gallery: propGallery,
   onUpdateSettings,
   onUpdateVacancies,
   onUpdateProjects,
   onUpdateNews,
+  onUpdateGallery,
   onRefreshData,
   onSyncCloudApplications,
   onSyncCloudInquiries,
@@ -114,7 +134,30 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   }, [propIsAuthenticated]);
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'applications' | 'inquiries' | 'vacancies' | 'projects' | 'settings' | 'workspace' | 'cloudsql'>('applications');
+  const [activeTab, setActiveTab] = useState<'applications' | 'inquiries' | 'vacancies' | 'gallery' | 'projects' | 'settings' | 'workspace' | 'cloudsql'>('applications');
+
+  // Gallery Management State
+  const [galleryList, setGalleryList] = useState<GalleryItem[]>(propGallery || getStoredGallery);
+  const [showAddGallery, setShowAddGallery] = useState(false);
+  const [newGalTitle, setNewGalTitle] = useState('');
+  const [newGalCategory, setNewGalCategory] = useState<'piping' | 'welding' | 'assembly' | 'installation' | 'shipyard'>('piping');
+  const [newGalLocation, setNewGalLocation] = useState('Rotterdam, Netherlands');
+  const [newGalYear, setNewGalYear] = useState('2026');
+  const [newGalDesc, setNewGalDesc] = useState('');
+  const [newGalImageUrl, setNewGalImageUrl] = useState('');
+  const [newGalTags, setNewGalTags] = useState('TIG, Spool, ISO');
+  const [galleryFilter, setGalleryFilter] = useState<string>('all');
+  const [galleryToast, setGalleryToast] = useState<string | null>(null);
+
+  // Email Forwarding Notice
+  const [forwardNotice, setForwardNotice] = useState<string | null>(null);
+  const [isForwardingEmail, setIsForwardingEmail] = useState(false);
+
+  useEffect(() => {
+    if (propGallery) {
+      setGalleryList(propGallery);
+    }
+  }, [propGallery]);
 
   // Cloud Firestore Sync State
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
@@ -167,13 +210,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     setCloudSyncError(null);
     setCloudSyncMessage(null);
     try {
-      const [cloudApps, cloudInqs] = await Promise.all([
+      const [cloudApps, cloudInqs, cloudGals] = await Promise.all([
         fetchCloudCandidateApplications(),
-        fetchCloudClientInquiries()
+        fetchCloudClientInquiries(),
+        fetchCloudGallery()
       ]);
       if (onSyncCloudApplications) onSyncCloudApplications(cloudApps);
       if (onSyncCloudInquiries) onSyncCloudInquiries(cloudInqs);
-      setCloudSyncMessage(`Google Cloud Firestore ilə canlı əlaqə quruldu: ${cloudApps.length} namizəd CV-si və ${cloudInqs.length} müştəri sorğusu yeniləndi.`);
+      if (cloudGals && cloudGals.length > 0) {
+        setGalleryList(cloudGals);
+        if (onUpdateGallery) onUpdateGallery(cloudGals);
+        saveStoredGallery(cloudGals);
+      }
+      setCloudSyncMessage(`Google Cloud Firestore ilə canlı əlaqə quruldu: ${cloudApps.length} namizəd CV-si, ${cloudInqs.length} müştəri sorğusu və ${cloudGals?.length || 0} qalereya şəkli yeniləndi.`);
       setTimeout(() => setCloudSyncMessage(null), 5000);
     } catch (err: any) {
       if (err?.code === 'permission-denied' || String(err).includes('permission') || String(err).includes('insufficient')) {
@@ -425,6 +474,116 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     onUpdateVacancies(updated);
   };
 
+  // Gallery Item Handlers
+  const handleCreateGalleryItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGalTitle.trim() || !newGalImageUrl.trim()) {
+      alert('Zəhmət olmasa şəkil üçün başlıq və şəkil URL-i daxil edin.');
+      return;
+    }
+
+    const newItem: GalleryItem = {
+      id: `gal-${Date.now()}`,
+      title: {
+        en: newGalTitle.trim(),
+        lt: newGalTitle.trim(),
+        fr: newGalTitle.trim(),
+        nl: newGalTitle.trim(),
+        tr: newGalTitle.trim()
+      },
+      category: newGalCategory,
+      location: newGalLocation.trim() || 'Rotterdam, Netherlands',
+      year: newGalYear.trim() || new Date().getFullYear().toString(),
+      description: {
+        en: newGalDesc.trim() || newGalTitle.trim(),
+        lt: newGalDesc.trim() || newGalTitle.trim(),
+        fr: newGalDesc.trim() || newGalTitle.trim(),
+        nl: newGalDesc.trim() || newGalTitle.trim(),
+        tr: newGalDesc.trim() || newGalTitle.trim()
+      },
+      imageUrl: newGalImageUrl.trim(),
+      tags: newGalTags.split(',').map((s) => s.trim()).filter(Boolean)
+    };
+
+    const updated = [newItem, ...galleryList];
+    setGalleryList(updated);
+    saveStoredGallery(updated);
+    if (onUpdateGallery) onUpdateGallery(updated);
+
+    try {
+      await saveCloudGalleryItem(newItem);
+    } catch (err) {
+      console.warn('Firestore gallery save note:', err);
+    }
+
+    setShowAddGallery(false);
+    setNewGalTitle('');
+    setNewGalDesc('');
+    setNewGalImageUrl('');
+    setGalleryToast('Şəkil qalereyaya uğurla əlavə edildi!');
+    setTimeout(() => setGalleryToast(null), 4000);
+  };
+
+  const handleDeleteGalleryItem = async (id: string) => {
+    if (!window.confirm('Bu şəkli qalereyadan silmək istədiyinizə əminsiniz?')) return;
+    const updated = galleryList.filter((item) => item.id !== id);
+    setGalleryList(updated);
+    saveStoredGallery(updated);
+    if (onUpdateGallery) onUpdateGallery(updated);
+
+    try {
+      await deleteCloudGalleryItem(id);
+    } catch (err) {
+      console.warn('Firestore gallery delete note:', err);
+    }
+
+    setGalleryToast('Şəkil qalereyadan silindi.');
+    setTimeout(() => setGalleryToast(null), 3000);
+  };
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Şəkil həcmi maksimum 5MB ola bilər.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setNewGalImageUrl(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleForwardCandidateToOffice = async (app: CandidateApplication) => {
+    setIsForwardingEmail(true);
+    setForwardNotice(null);
+    try {
+      const res = await notifyOfficeNewCandidateApplication(app);
+      setForwardNotice(`✓ ${app.fullName} CV müraciəti ${TARGET_OFFICE_EMAIL} ünvanına göndərildi (${res.channel}).`);
+    } catch (err: any) {
+      setForwardNotice(`Xəta: ${err?.message || 'Email göndərilə bilmədi'}`);
+    } finally {
+      setIsForwardingEmail(false);
+      setTimeout(() => setForwardNotice(null), 5000);
+    }
+  };
+
+  const handleForwardInquiryToOffice = async (inq: ClientInquiry) => {
+    setIsForwardingEmail(true);
+    setForwardNotice(null);
+    try {
+      const res = await notifyOfficeNewClientInquiry(inq);
+      setForwardNotice(`✓ ${inq.companyName} sorğusu ${TARGET_OFFICE_EMAIL} ünvanına göndərildi (${res.channel}).`);
+    } catch (err: any) {
+      setForwardNotice(`Xəta: ${err?.message || 'Email göndərilə bilmədi'}`);
+    } finally {
+      setIsForwardingEmail(false);
+      setTimeout(() => setForwardNotice(null), 5000);
+    }
+  };
+
   // If NOT authenticated, show 2FA Login Screen (Section 24)
   if (!isAuthenticated) {
     return (
@@ -560,6 +719,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           >
             <Briefcase className="w-4 h-4" />
             <span>Vacancies ({vacancies.length})</span>
+          </button>
+
+          <button
+            id="admin-tab-gallery"
+            onClick={() => setActiveTab('gallery')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+              activeTab === 'gallery'
+                ? 'bg-[#123F32] text-white'
+                : 'bg-white text-[#193E33] border border-[#D5DED6] hover:bg-[#EAF0E9]'
+            }`}
+          >
+            <Image className="w-4 h-4 text-emerald-500" />
+            <span>Qalereya / Gallery ({galleryList.length})</span>
           </button>
 
           <button
@@ -994,6 +1166,161 @@ export const AdminPage: React.FC<AdminPageProps> = ({
           </div>
         )}
 
+        {/* TAB: Gallery Management (Qalereya İdarəetməsi) */}
+        {activeTab === 'gallery' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#193E33] flex items-center gap-2">
+                  <Image className="w-5 h-5 text-[#123F32]" />
+                  <span>Qalereya Şəkilləri ({galleryList.length})</span>
+                </h2>
+                <p className="text-xs text-[#586B62]">
+                  Saytın Qalereya bölməsindəki iş və layihə şəkillərini buradan əlavə edə və ya silə bilərsiniz.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddGallery(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#123F32] hover:bg-[#25664E] text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Yeni Şəkil Əlavə Et</span>
+                </button>
+              </div>
+            </div>
+
+            {galleryToast && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{galleryToast}</span>
+              </div>
+            )}
+
+            {/* Category Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2 pb-2">
+              <span className="text-xs font-medium text-[#586B62] mr-1">Filter:</span>
+              {['all', 'piping', 'welding', 'assembly', 'installation', 'shipyard'].map((cat) => {
+                const count = cat === 'all'
+                  ? galleryList.length
+                  : galleryList.filter((item) => item.category === cat).length;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setGalleryFilter(cat)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      galleryFilter === cat
+                        ? 'bg-[#123F32] text-white shadow-2xs'
+                        : 'bg-white text-[#193E33] border border-[#D5DED6] hover:bg-[#EAF0E9]'
+                    }`}
+                  >
+                    <span className="capitalize">{cat === 'all' ? 'Hamısı' : cat}</span>
+                    <span className="ml-1.5 opacity-70 text-[10px]">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Gallery Grid */}
+            {galleryList.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {galleryList
+                  .filter((item) => galleryFilter === 'all' || item.category === galleryFilter)
+                  .map((item) => {
+                    const titleStr = typeof item.title === 'string' ? item.title : (item.title?.en || (item.title as any)?.az || 'Worksite Photo');
+                    const descStr = typeof item.description === 'string' ? item.description : (item.description?.en || '');
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-white rounded-2xl border border-[#D5DED6] overflow-hidden shadow-xs hover:border-[#123F32] transition-all flex flex-col justify-between"
+                      >
+                        <div>
+                          {/* Image Thumbnail */}
+                          <div className="relative aspect-16/10 bg-[#EAF0E9] overflow-hidden group">
+                            <img
+                              src={item.imageUrl}
+                              alt={titleStr}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=800&q=80';
+                              }}
+                            />
+                            <div className="absolute top-2.5 left-2.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-black/60 text-white backdrop-blur-xs">
+                                {item.category}
+                              </span>
+                            </div>
+                            <div className="absolute top-2.5 right-2.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-white/90 text-[#123F32] shadow-xs">
+                                {item.year || '2026'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Info Section */}
+                          <div className="p-4">
+                            <h3 className="font-bold text-[#193E33] text-sm mb-1 line-clamp-1">
+                              {titleStr}
+                            </h3>
+                            <div className="text-[11px] text-[#586B62] mb-2 flex items-center gap-1.5">
+                              <span>📍 {item.location}</span>
+                            </div>
+                            {descStr && (
+                              <p className="text-xs text-[#586B62] line-clamp-2 mb-2 leading-relaxed">
+                                {descStr}
+                              </p>
+                            )}
+                            {item.tags && item.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {item.tags.map((tag, i) => (
+                                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#EAF0E9] text-[#123F32] font-mono">
+                                    #{tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card Footer Actions */}
+                        <div className="p-3 bg-[#F8F9F6] border-t border-[#D5DED6] flex items-center justify-between">
+                          <a
+                            href={item.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#123F32] hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Bax</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGalleryItem(item.id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold cursor-pointer transition-colors"
+                            title="Şəkli sil"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Sil</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-[#D5DED6] p-12 text-center text-xs text-[#586B62]">
+                <Image className="w-8 h-8 text-[#96B5A1] mx-auto mb-2" />
+                <span>Qalereyada heç bir şəkil yoxdur. "Yeni Şəkil Əlavə Et" düyməsi ilə əlavə edin.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TAB 4: Site Settings & Telephone (Section 21 & 22) */}
         {activeTab === 'settings' && (
           <div className="max-w-2xl bg-white rounded-2xl border border-[#D5DED6] p-8 shadow-xs">
@@ -1308,15 +1635,35 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               </div>
             </div>
 
-            <div className="pt-6 border-t border-[#D5DED6] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => handleDeleteApp(selectedApp.id)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Candidate</span>
-              </button>
+            {forwardNotice && (
+              <div className="mt-4 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{forwardNotice}</span>
+              </div>
+            )}
+
+            <div className="pt-6 border-t border-[#D5DED6] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteApp(selectedApp.id)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Candidate</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isForwardingEmail}
+                  onClick={() => handleForwardCandidateToOffice(selectedApp)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                  title="Müraciəti office@smarteura.eu ünvanına göndər"
+                >
+                  <Send className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{isForwardingEmail ? 'Göndərilir...' : 'office@smarteura.eu ünvanına göndər'}</span>
+                </button>
+              </div>
 
               <div className="flex gap-3">
                 <button
@@ -1486,15 +1833,35 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               </div>
             </div>
 
-            <div className="pt-6 border-t border-[#D5DED6] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => handleDeleteInquiry(selectedInquiry.id)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Inquiry</span>
-              </button>
+            {forwardNotice && (
+              <div className="mt-4 p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{forwardNotice}</span>
+              </div>
+            )}
+
+            <div className="pt-6 border-t border-[#D5DED6] flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteInquiry(selectedInquiry.id)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 text-xs font-semibold cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Inquiry</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isForwardingEmail}
+                  onClick={() => handleForwardInquiryToOffice(selectedInquiry)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+                  title="Sorğunu office@smarteura.eu ünvanına göndər"
+                >
+                  <Send className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{isForwardingEmail ? 'Göndərilir...' : 'office@smarteura.eu ünvanına göndər'}</span>
+                </button>
+              </div>
 
               <div className="flex gap-3">
                 <button
@@ -1603,6 +1970,209 @@ export const AdminPage: React.FC<AdminPageProps> = ({
                   className="px-5 py-2 rounded-lg bg-[#123F32] text-white text-xs font-semibold hover:bg-[#25664E]"
                 >
                   Publish Vacancy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Gallery Item Modal */}
+      {showAddGallery && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-[#D5DED6] max-w-xl w-full p-6 sm:p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-[#D5DED6]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#EAF0E9] text-[#123F32] flex items-center justify-center">
+                  <Image className="w-4 h-4" />
+                </div>
+                <h3 className="text-lg font-bold text-[#193E33]">
+                  Qalereyaya Yeni Şəkil Əlavə Et
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddGallery(false)}
+                className="p-1 rounded-lg text-[#586B62] hover:bg-[#F8F9F6] cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGalleryItem} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                  Şəkil Başlığı (Title) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newGalTitle}
+                  onChange={(e) => setNewGalTitle(e.target.value)}
+                  placeholder="məs: TIG Boru Qaynağı və Prefabrikasiya"
+                  className="w-full px-3.5 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33] focus:outline-hidden focus:border-[#123F32]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                    Kateqoriya (Category) *
+                  </label>
+                  <select
+                    value={newGalCategory}
+                    onChange={(e) => setNewGalCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33]"
+                  >
+                    <option value="piping">Piping (Vamzdynai / Borulama)</option>
+                    <option value="welding">Welding (Suvirinimas / Qaynaq)</option>
+                    <option value="assembly">Assembly (Surinkimas / Yığma)</option>
+                    <option value="installation">Installation (Montavimas / Quraşdırma)</option>
+                    <option value="shipyard">Shipyard (Laivų statyba / Gəmiqayırma)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                    İl (Year)
+                  </label>
+                  <input
+                    type="text"
+                    value={newGalYear}
+                    onChange={(e) => setNewGalYear(e.target.value)}
+                    placeholder="2026"
+                    className="w-full px-3.5 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                  Yerləşmə / Şəhər və Ölkə (Location)
+                </label>
+                <input
+                  type="text"
+                  value={newGalLocation}
+                  onChange={(e) => setNewGalLocation(e.target.value)}
+                  placeholder="məs: Rotterdam, Netherlands / Klaipėda, Lithuania"
+                  className="w-full px-3.5 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33]"
+                />
+              </div>
+
+              {/* Image Input Options */}
+              <div className="space-y-2 p-3 bg-[#F8F9F6] rounded-xl border border-[#D5DED6]">
+                <label className="block text-xs font-bold text-[#193E33]">
+                  Şəkil Mənbəyi (URL və ya Cihazdan Yüklə) *
+                </label>
+
+                <div>
+                  <input
+                    type="url"
+                    required
+                    value={newGalImageUrl}
+                    onChange={(e) => setNewGalImageUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/... və ya şəkil linki"
+                    className="w-full px-3.5 py-2 rounded-lg bg-white border border-[#D5DED6] text-xs text-[#193E33]"
+                  />
+                </div>
+
+                {/* Upload from local device */}
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-[#D5DED6] hover:bg-[#EAF0E9] text-xs font-medium text-[#123F32] cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Kompüterdən / Telefondan Şəkil Seç</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <span className="text-[11px] text-[#586B62]">(Maks. 5 MB)</span>
+                </div>
+
+                {/* Quick Presets for instant photo fill */}
+                <div className="pt-2">
+                  <span className="text-[10px] uppercase font-bold text-[#586B62] block mb-1">
+                    Sürətli Təklif Olunan Şəkillər (Bir kliklə seçin):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Boru Prefabrikasiyası', url: 'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'TIG Qaynaq İşi', url: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'Mexaniki Yığma', url: 'https://images.unsplash.com/photo-1581092335397-9583fe92d232?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'Sənaye Quraşdırma', url: 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'Gəmi Təmiri', url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?auto=format&fit=crop&w=1200&q=80' }
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setNewGalImageUrl(preset.url)}
+                        className="text-[10px] px-2 py-1 bg-white hover:bg-emerald-50 text-[#123F32] border border-[#D5DED6] rounded-md transition-colors cursor-pointer"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Image Live Preview */}
+                {newGalImageUrl && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-[#D5DED6] bg-black/5 aspect-16/9 max-h-48 relative">
+                    <img
+                      src={newGalImageUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).alt = 'Şəkil yüklənə bilmədi (URL yoxlayın)';
+                      }}
+                    />
+                    <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full text-[10px] bg-black/60 text-white font-mono">
+                      Önizləmə
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                  Qısa Təsvir (Description)
+                </label>
+                <textarea
+                  rows={2}
+                  value={newGalDesc}
+                  onChange={(e) => setNewGalDesc(e.target.value)}
+                  placeholder="Görülən iş və layihə haqqında qısa məlumat..."
+                  className="w-full px-3.5 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#193E33] mb-1">
+                  Teqlər (Tags, vergüllə ayırın)
+                </label>
+                <input
+                  type="text"
+                  value={newGalTags}
+                  onChange={(e) => setNewGalTags(e.target.value)}
+                  placeholder="TIG, Spool, Isometric, ISO 9606"
+                  className="w-full px-3.5 py-2 rounded-lg bg-[#F8F9F6] border border-[#D5DED6] text-xs text-[#193E33]"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-[#D5DED6] flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddGallery(false)}
+                  className="px-4 py-2 rounded-lg border border-[#D5DED6] text-xs font-semibold text-[#586B62] cursor-pointer"
+                >
+                  Ləğv et
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-[#123F32] hover:bg-[#25664E] text-white text-xs font-semibold cursor-pointer shadow-xs"
+                >
+                  Qalereyaya Əlavə Et
                 </button>
               </div>
             </form>

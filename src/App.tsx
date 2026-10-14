@@ -358,10 +358,12 @@ export default function App() {
                 inquiries={inquiries}
                 projects={projects}
                 news={news}
+                gallery={gallery}
                 onUpdateSettings={setSettings}
                 onUpdateVacancies={setVacancies}
                 onUpdateProjects={setProjects}
                 onUpdateNews={setNews}
+                onUpdateGallery={setGallery}
                 onRefreshData={handleRefreshData}
                 onSyncCloudApplications={setApplications}
                 onSyncCloudInquiries={setInquiries}

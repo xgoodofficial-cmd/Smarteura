@@ -66,6 +66,19 @@
       "properties": {
         "status": { "type": "string", "maxLength": 50 }
       }
+    },
+    "GalleryItem": {
+      "title": "GalleryItem",
+      "description": "Worksites and technical gallery images",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "category": { "type": "string", "maxLength": 60 },
+        "location": { "type": "string", "maxLength": 120 },
+        "year": { "type": "string", "maxLength": 20 }
+      },
+      "required": ["id", "imageUrl", "category"]
     }
   },
   "firestore": {
@@ -84,6 +97,10 @@
     "/candidate_applications/{applicationId}": {
       "schema": "CandidateApplication",
       "description": "Candidate CV and trade applications accessible strictly to admins"
+    },
+    "/gallery/{itemId}": {
+      "schema": "GalleryItem",
+      "description": "Worksites and industrial gallery items readable publicly and managed by admins"
     },
     "/test/{docId}": {
       "schema": "TestConnection",
